@@ -18,6 +18,9 @@ import {
 type PaymentPrice =
   | Price
   | ((context: HTTPRequestContext) => Price | Promise<Price>);
+type PaymentPayTo =
+  | string
+  | ((context: HTTPRequestContext) => string | Promise<string>);
 
 export function createMonadX402Server() {
   const facilitatorUrl = envString("FACILITATOR_URL", DEFAULT_FACILITATOR_URL);
@@ -46,11 +49,13 @@ export function createMonadX402Server() {
 
 export function createMonadRouteConfig({
   price = envString("TOOL_PRICE", DEFAULT_TOOL_PRICE),
+  payTo = envAddress("PAY_TO_ADDRESS"),
   resource,
   description,
   unpaidResponseBody,
 }: {
   price?: PaymentPrice;
+  payTo?: PaymentPayTo;
   resource: string;
   description?: string;
   unpaidResponseBody?: RouteConfig["unpaidResponseBody"];
@@ -59,7 +64,7 @@ export function createMonadRouteConfig({
     accepts: {
       scheme: X402_SCHEME,
       network: MONAD_NETWORK,
-      payTo: envAddress("PAY_TO_ADDRESS"),
+      payTo,
       price,
     },
     resource,

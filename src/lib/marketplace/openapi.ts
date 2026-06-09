@@ -1,5 +1,5 @@
-import { listCapabilities } from "./capabilities";
 import { getMarketplaceManifest } from "./manifest";
+import { listCapabilities } from "./registry";
 
 export function getOpenApiSpec(baseUrl: string) {
   const manifest = getMarketplaceManifest(baseUrl);
@@ -128,6 +128,80 @@ export function getOpenApiSpec(baseUrl: string) {
           },
         },
       },
+      "/api/providers": {
+        get: {
+          operationId: "listProviders",
+          summary: "List registered seller agents and tool providers.",
+          responses: {
+            "200": { description: "Registered providers" },
+          },
+        },
+      },
+      "/api/providers/register": {
+        post: {
+          operationId: "registerProvider",
+          summary: "Register a seller agent/provider endpoint.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/ProviderRegistrationRequest",
+                },
+              },
+            },
+          },
+          responses: {
+            "201": { description: "Provider registration with provider token" },
+            "400": { description: "Invalid provider registration" },
+          },
+        },
+      },
+      "/api/providers/{providerId}/capabilities": {
+        get: {
+          operationId: "listProviderCapabilities",
+          summary: "List capabilities published by one provider.",
+          parameters: [
+            {
+              name: "providerId",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": { description: "Provider capabilities" },
+          },
+        },
+        post: {
+          operationId: "publishProviderCapability",
+          summary:
+            "Publish a seller capability. Requires Authorization: Bearer <provider_token>.",
+          parameters: [
+            {
+              name: "providerId",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/CapabilityRegistrationRequest",
+                },
+              },
+            },
+          },
+          responses: {
+            "201": { description: "Published capability" },
+            "401": { description: "Invalid provider token" },
+            "400": { description: "Invalid capability registration" },
+          },
+        },
+      },
     },
     components: {
       schemas: {
@@ -165,6 +239,61 @@ export function getOpenApiSpec(baseUrl: string) {
             quote_id: { type: "string" },
             execution_token: { type: "string" },
             arguments: { type: "object" },
+          },
+        },
+        ProviderRegistrationRequest: {
+          type: "object",
+          required: ["name", "endpoint_url", "pay_to"],
+          properties: {
+            provider_id: { type: "string" },
+            name: { type: "string" },
+            endpoint_url: { type: "string", format: "uri" },
+            pay_to: { type: "string", pattern: "^0x[a-fA-F0-9]{40}$" },
+            contact: { type: "string" },
+          },
+        },
+        CapabilityRegistrationRequest: {
+          type: "object",
+          required: [
+            "name",
+            "architecture",
+            "summary",
+            "capabilities",
+            "input_schema",
+            "output_schema",
+            "price",
+          ],
+          properties: {
+            id: { type: "string" },
+            name: { type: "string" },
+            architecture: {
+              type: "string",
+              enum: [
+                "direct-tool-rental",
+                "agent-as-a-service",
+                "capability-leasing",
+              ],
+            },
+            summary: { type: "string" },
+            capabilities: {
+              type: "array",
+              items: { type: "string" },
+            },
+            input_schema: { type: "object" },
+            output_schema: { type: "object" },
+            price: {
+              type: "object",
+              required: ["base"],
+              properties: {
+                base: { type: "string", example: "0.03" },
+                marketplace_fee_bps: {
+                  type: "integer",
+                  minimum: 0,
+                  maximum: 10000,
+                  default: 0,
+                },
+              },
+            },
           },
         },
       },

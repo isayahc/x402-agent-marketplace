@@ -1,8 +1,8 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 
-import { envString } from "@/lib/x402-config";
+import { envAddress, envString } from "@/lib/x402-config";
 
-import { getCapability } from "./capabilities";
+import { getCapability } from "./registry";
 import type {
   ExecutionTokenPayload,
   QuotePayload,
@@ -92,12 +92,30 @@ function splitFee(base: string, marketplaceFeeBps: number) {
   };
 }
 
-export function createQuote(capabilityId: string): QuoteResponse {
+function quotePayTo(capabilityId: string) {
   const capability = getCapability(capabilityId);
 
   if (!capability) {
     throw new Error(`Unknown capability: ${capabilityId}`);
   }
+
+  if (capability.seller?.mode === "provider" && capability.seller.pay_to) {
+    return {
+      capability,
+      payTo: capability.seller.pay_to,
+      paymentReceiver: "provider" as const,
+    };
+  }
+
+  return {
+    capability,
+    payTo: envAddress("PAY_TO_ADDRESS"),
+    paymentReceiver: "marketplace" as const,
+  };
+}
+
+export function createQuote(capabilityId: string): QuoteResponse {
+  const { capability, payTo, paymentReceiver } = quotePayTo(capabilityId);
 
   const issuedAt = new Date();
   const expiresAt = new Date(issuedAt.getTime() + QUOTE_TTL_MS);
@@ -111,6 +129,8 @@ export function createQuote(capabilityId: string): QuoteResponse {
     x402_price: `$${capability.price.base}`,
     cost: capability.price.base,
     currency: capability.price.currency,
+    pay_to: payTo,
+    payment_receiver: paymentReceiver,
     marketplace_fee: marketplaceFee,
     provider_payout: providerPayout,
     issued_at: issuedAt.toISOString(),
@@ -156,6 +176,8 @@ export function verifyQuote(quoteId: string): QuotePayload {
     x402_price: payload.x402_price,
     cost: payload.cost,
     currency: payload.currency,
+    pay_to: payload.pay_to,
+    payment_receiver: payload.payment_receiver,
     marketplace_fee: payload.marketplace_fee,
     provider_payout: payload.provider_payout,
     issued_at: payload.issued_at,

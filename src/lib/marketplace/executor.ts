@@ -1,5 +1,7 @@
-import { getCapability } from "./capabilities";
-import type { ExecuteResponse, ExecutionTokenPayload } from "./types";
+import { getCapability } from "./registry";
+import type { Capability, ExecuteResponse, ExecutionTokenPayload } from "./types";
+
+const PROVIDER_TIMEOUT_MS = 15_000;
 
 function requireString(
   input: Record<string, unknown>,
@@ -11,13 +13,86 @@ function requireString(
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
-export function executeCapability({
+async function executeProviderCapability({
+  capability,
+  token,
+  args,
+}: {
+  capability: Capability;
+  token: ExecutionTokenPayload;
+  args: Record<string, unknown>;
+}): Promise<Record<string, unknown>> {
+  if (!capability.seller?.endpoint_url) {
+    throw new Error(`Capability ${capability.id} has no provider endpoint`);
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(capability.seller.endpoint_url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-marketplace-provider": "x402-agent-marketplace",
+      },
+      body: JSON.stringify({
+        capability_id: capability.id,
+        quote_id: token.quote_id,
+        paid_at: token.paid_at,
+        arguments: args,
+      }),
+      signal: controller.signal,
+    });
+
+    const text = await response.text();
+    const parsed = text ? JSON.parse(text) : {};
+
+    if (!response.ok) {
+      throw new Error(
+        `Provider returned HTTP ${response.status}: ${JSON.stringify(parsed)}`,
+      );
+    }
+
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      "result" in parsed &&
+      parsed.result &&
+      typeof parsed.result === "object" &&
+      !Array.isArray(parsed.result)
+    ) {
+      return parsed.result as Record<string, unknown>;
+    }
+
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+
+    return { value: parsed };
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error("Provider returned invalid JSON");
+    }
+
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Provider timed out before returning a result");
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function executeCapability({
   token,
   args,
 }: {
   token: ExecutionTokenPayload;
   args: Record<string, unknown>;
-}): ExecuteResponse {
+}): Promise<ExecuteResponse> {
   const capability = getCapability(token.capability_id);
 
   if (!capability) {
@@ -26,7 +101,9 @@ export function executeCapability({
 
   let result: Record<string, unknown>;
 
-  if (capability.id === "ocr-basic") {
+  if (capability.seller?.mode === "provider") {
+    result = await executeProviderCapability({ capability, token, args });
+  } else if (capability.id === "ocr-basic") {
     const imageUrl = requireString(args, "image_url", "mock://invoice.png");
     result = {
       text: "Invoice #123. Balance due: 0.05 USDC. Payment terms: net 15.",

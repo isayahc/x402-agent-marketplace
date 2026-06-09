@@ -11,7 +11,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "agent": "tsx src/agent.ts"
+    "agent": "tsx src/agent.ts",
+    "seller": "tsx src/seller.ts"
   },
   "dependencies": {
     "@privy-io/react-auth": "^3.29.2",

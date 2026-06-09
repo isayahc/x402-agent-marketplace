@@ -1,6 +1,6 @@
 import type { Capability } from "./types";
 
-export const MARKETPLACE_CAPABILITIES = [
+export const STATIC_MARKETPLACE_CAPABILITIES = [
   {
     id: "ocr-basic",
     name: "OCR Basic",
@@ -112,12 +112,12 @@ export const MARKETPLACE_CAPABILITIES = [
   },
 ] as const satisfies Capability[];
 
-export function listCapabilities(): Capability[] {
-  return [...MARKETPLACE_CAPABILITIES];
+export function listStaticCapabilities(): Capability[] {
+  return [...STATIC_MARKETPLACE_CAPABILITIES];
 }
 
-export function getCapability(capabilityId: string): Capability | undefined {
-  return MARKETPLACE_CAPABILITIES.find(
+export function getStaticCapability(capabilityId: string): Capability | undefined {
+  return STATIC_MARKETPLACE_CAPABILITIES.find(
     (capability) => capability.id === capabilityId,
   );
 }

@@ -5,6 +5,7 @@ import type { HTTPRequestContext } from "@x402/core/server";
 import { jsonResponse, optionsResponse } from "@/lib/http";
 import { createExecutionToken, verifyQuote } from "@/lib/marketplace/quotes";
 import type { PayResponse } from "@/lib/marketplace/types";
+import { envAddress } from "@/lib/x402-config";
 import { createMonadRouteConfig, createMonadX402Server } from "@/lib/x402-server";
 
 const server = createMonadX402Server();
@@ -21,6 +22,16 @@ function getQuoteIdFromUrl(request: NextRequest) {
 const routeConfig = createMonadRouteConfig({
   resource: "/api/pay",
   description: "Pay a capability quote and receive a signed execution token",
+  payTo: async (context: HTTPRequestContext) => {
+    const quoteId = context.adapter.getQueryParam?.("quote_id");
+    const quoteIdString = Array.isArray(quoteId) ? quoteId[0] : quoteId;
+
+    if (!quoteIdString) {
+      return envAddress("PAY_TO_ADDRESS");
+    }
+
+    return verifyQuote(quoteIdString).pay_to;
+  },
   price: async (context: HTTPRequestContext) => {
     const quoteId = context.adapter.getQueryParam?.("quote_id");
     const quoteIdString = Array.isArray(quoteId) ? quoteId[0] : quoteId;

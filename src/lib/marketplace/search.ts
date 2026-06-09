@@ -1,4 +1,4 @@
-import { listCapabilities } from "./capabilities";
+import { listCapabilities } from "./registry";
 import type {
   Capability,
   CapabilitySearchRequest,

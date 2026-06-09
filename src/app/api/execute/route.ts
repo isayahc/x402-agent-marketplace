@@ -35,12 +35,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return jsonResponse(
-      executeCapability({
-        token,
-        args: isRecord(body.arguments) ? body.arguments : {},
-      }),
-    );
+    const response = await executeCapability({
+      token,
+      args: isRecord(body.arguments) ? body.arguments : {},
+    });
+
+    return jsonResponse(response);
   } catch (error) {
     return jsonResponse(
       {

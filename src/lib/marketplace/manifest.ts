@@ -24,6 +24,9 @@ export function getMarketplaceManifest(baseUrl: string): MarketplaceManifest {
       quote: `${normalizedBaseUrl}/api/quote`,
       pay: `${normalizedBaseUrl}/api/pay?quote_id={quote_id}`,
       execute: `${normalizedBaseUrl}/api/execute`,
+      providers: `${normalizedBaseUrl}/api/providers`,
+      provider_registration: `${normalizedBaseUrl}/api/providers/register`,
+      provider_capabilities: `${normalizedBaseUrl}/api/providers/{provider_id}/capabilities`,
     },
     flow: [
       "Search or list capabilities.",
@@ -31,6 +34,7 @@ export function getMarketplaceManifest(baseUrl: string): MarketplaceManifest {
       "Pay POST /api/pay?quote_id=<quote_id> with x402.",
       "Use the returned execution_token with POST /api/execute.",
       "Send only a narrow task packet in execute.arguments.",
+      "Seller agents can register with POST /api/providers/register and publish capabilities under their provider id.",
     ],
   };
 }

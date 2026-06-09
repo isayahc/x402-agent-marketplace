@@ -1,3 +1,5 @@
+import type { Address } from "viem";
+
 export type MarketplaceArchitecture =
   | "direct-tool-rental"
   | "agent-as-a-service"
@@ -26,6 +28,53 @@ export type Capability = {
   inputSchema: JsonSchema;
   outputSchema: JsonSchema;
   price: CapabilityPrice;
+  seller?: {
+    mode: "static" | "provider";
+    endpoint_url?: string;
+    pay_to?: Address;
+    registered_at?: string;
+  };
+};
+
+export type RegisteredProvider = {
+  id: string;
+  name: string;
+  endpoint_url: string;
+  pay_to: Address;
+  contact?: string;
+  status: "active";
+  created_at: string;
+};
+
+export type ProviderRegistrationRequest = {
+  provider_id?: string;
+  name?: string;
+  endpoint_url?: string;
+  pay_to?: string;
+  contact?: string;
+};
+
+export type ProviderRegistrationResponse = {
+  provider: RegisteredProvider;
+  provider_token: string;
+  routes: {
+    add_capability: string;
+    list_capabilities: string;
+  };
+};
+
+export type CapabilityRegistrationRequest = {
+  id?: string;
+  name?: string;
+  architecture?: MarketplaceArchitecture;
+  summary?: string;
+  capabilities?: string[];
+  input_schema?: JsonSchema;
+  output_schema?: JsonSchema;
+  price?: {
+    base?: string;
+    marketplace_fee_bps?: number;
+  };
 };
 
 export type CapabilitySearchRequest = {
@@ -64,6 +113,9 @@ export type MarketplaceManifest = {
     quote: string;
     pay: string;
     execute: string;
+    providers: string;
+    provider_registration: string;
+    provider_capabilities: string;
   };
   flow: string[];
 };
@@ -79,6 +131,8 @@ export type QuotePayload = {
   x402_price: string;
   cost: string;
   currency: "USDC";
+  pay_to: Address;
+  payment_receiver: "marketplace" | "provider";
   marketplace_fee: string;
   provider_payout: string;
   issued_at: string;

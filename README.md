@@ -6,7 +6,9 @@ Hackathon-grade x402 pay-per-call tool provider and autonomous Node agent for Mo
 
 - `GET /api/tool`: a protected Next.js App Router route using `withX402`, `x402ResourceServer`, `HTTPFacilitatorClient`, and `ExactEvmScheme`.
 - Capability marketplace prototype: `GET /api/capabilities`, `POST /api/quote`, paid `POST /api/pay`, and `POST /api/execute`.
+- Seller-agent API: `POST /api/providers/register` and `POST /api/providers/{provider_id}/capabilities` let agents publish their own paid tool capabilities.
 - `npm run agent`: a TypeScript Node script that signs x402 payments with `AGENT_PRIVATE_KEY`, calls the provider, prints the structured result, and links the settlement transaction.
+- `npm run seller`: a TypeScript Node script that registers a demo seller agent and publishes a capability over plain HTTP.
 - Privy signup on the home page using `@privy-io/react-auth`.
 - Shared Monad/x402 constants in `src/lib/x402-config.ts`.
 
@@ -38,6 +40,15 @@ MONAD_RPC_URL=https://testnet-rpc.monad.xyz
 USDC_ADDRESS=0x534b2f3A21130d7a60830c2Df862319e593943A3
 NEXT_PUBLIC_PRIVY_APP_ID=your_privy_app_id
 NEXT_PUBLIC_PRIVY_CLIENT_ID=
+SELLER_PROVIDER_ID=
+SELLER_NAME=Demo Seller Agent
+SELLER_ENDPOINT_URL=http://localhost:3000/api/mock-provider
+SELLER_PAY_TO_ADDRESS=
+SELLER_CONTACT=
+SELLER_CAPABILITY_ID=demo-analysis
+SELLER_CAPABILITY_NAME=Demo Analysis Agent
+SELLER_PRICE=0.02
+SELLER_MARKETPLACE_FEE_BPS=0
 ```
 
 Never commit real keys. `PAY_TO_ADDRESS` receives USDC. `AGENT_PRIVATE_KEY` pays for tool calls. `MARKETPLACE_SIGNING_SECRET` signs stateless quote and execution tokens. Keep the backslash before `$` in env files so Next loads the price as `$0.01`; or omit `TOOL_PRICE` to use the same default. `NEXT_PUBLIC_PRIVY_APP_ID` comes from the Privy dashboard and is safe for the browser; do not expose Privy app secrets in `NEXT_PUBLIC_*` variables.
@@ -70,6 +81,49 @@ curl 'http://localhost:3000/api/search?q=sec%20risk&max_price=0.05'
 ```
 
 All public discovery and execution routes return JSON and include permissive CORS headers for browser-hosted agents. The paid step is still x402: agents that can handle HTTP 402 payment requirements can buy access through `POST /api/pay?quote_id=<quote_id>`.
+
+## Seller-Agent API
+
+Seller agents can publish capabilities without a dashboard or browser wallet. Registration is currently in-memory for hackathon use, so restart clears registered providers.
+
+Register a provider:
+
+```bash
+curl -X POST http://localhost:3000/api/providers/register \
+  -H 'content-type: application/json' \
+  -d '{
+    "provider_id": "demo-seller",
+    "name": "Demo Seller Agent",
+    "endpoint_url": "http://localhost:3000/api/mock-provider",
+    "pay_to": "0xYourProviderPayoutAddress"
+  }'
+```
+
+The response includes a `provider_token`. Keep it secret. Publish a capability:
+
+```bash
+curl -X POST http://localhost:3000/api/providers/demo-seller/capabilities \
+  -H 'content-type: application/json' \
+  -H 'authorization: Bearer <provider_token>' \
+  -d '{
+    "id": "demo-analysis",
+    "name": "Demo Analysis Agent",
+    "architecture": "agent-as-a-service",
+    "summary": "Accepts a paid task packet and returns structured JSON.",
+    "capabilities": ["demo_analysis", "structured_output"],
+    "input_schema": { "type": "object", "properties": { "prompt": { "type": "string" } } },
+    "output_schema": { "type": "object", "properties": { "summary": { "type": "string" } } },
+    "price": { "base": "0.02", "marketplace_fee_bps": 0 }
+  }'
+```
+
+The new capability appears in `/api/search` and `/api/capabilities`. Quotes for registered seller capabilities set `pay_to` to the seller's payout address, and the x402 `/api/pay` requirement uses that same signed address. The current prototype does not auto-split marketplace fees; x402 settlement is single-recipient here, so use `marketplace_fee_bps: 0` unless you add a payout ledger or split-settlement contract.
+
+You can run the same flow from TypeScript:
+
+```bash
+npm run seller
+```
 
 ## Marketplace Flow
 
@@ -144,6 +198,17 @@ Without payment, the provider should return HTTP 402 plus x402 requirements:
 ```bash
 curl -i http://localhost:3000/api/tool
 ```
+
+## Run A Seller Agent
+
+With the dev server running:
+
+```bash
+npm run seller
+curl 'http://localhost:3000/api/search?q=demo'
+```
+
+The script registers a provider, publishes a capability, and prints the provider token plus the published capability id. The default endpoint is the local demo provider at `/api/mock-provider`.
 
 ## Run The Agent
 

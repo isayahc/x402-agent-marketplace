@@ -1,8 +1,8 @@
 import { jsonResponse, optionsResponse } from "@/lib/http";
-import { listCapabilities } from "@/lib/marketplace/registry";
+import { listProviders } from "@/lib/marketplace/registry";
 
 export async function GET() {
-  return jsonResponse(listCapabilities());
+  return jsonResponse(listProviders());
 }
 
 export function OPTIONS() {
