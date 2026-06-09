@@ -1,53 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { withX402, type RouteConfig } from "@x402/next";
-import { HTTPFacilitatorClient, x402ResourceServer } from "@x402/core/server";
-import { ExactEvmScheme } from "@x402/evm/exact/server";
+import { withX402 } from "@x402/next";
 
-import {
-  DEFAULT_FACILITATOR_URL,
-  DEFAULT_TOOL_PRICE,
-  DEFAULT_USDC_ADDRESS,
-  envAddress,
-  envString,
-  MONAD_NETWORK,
-  USDC_DECIMALS,
-  USDC_EIP712_EXTRA,
-  X402_SCHEME,
-} from "@/lib/x402-config";
+import { optionsResponse } from "@/lib/http";
+import { createMonadRouteConfig, createMonadX402Server } from "@/lib/x402-server";
 
-const payTo = envAddress("PAY_TO_ADDRESS");
-const facilitatorUrl = envString("FACILITATOR_URL", DEFAULT_FACILITATOR_URL);
-const usdcAddress = envAddress("USDC_ADDRESS", DEFAULT_USDC_ADDRESS);
-const toolPrice = envString("TOOL_PRICE", DEFAULT_TOOL_PRICE);
+const server = createMonadX402Server();
 
-const facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
-const server = new x402ResourceServer(facilitatorClient);
-
-const monadScheme = new ExactEvmScheme();
-
-monadScheme.registerMoneyParser(async (amount: number, network: string) => {
-  if (network !== MONAD_NETWORK) {
-    return null;
-  }
-
-  return {
-    amount: Math.floor(amount * 10 ** USDC_DECIMALS).toString(),
-    asset: usdcAddress,
-    extra: USDC_EIP712_EXTRA,
-  };
-});
-
-server.register(MONAD_NETWORK, monadScheme);
-
-const routeConfig: RouteConfig = {
-  accepts: {
-    scheme: X402_SCHEME,
-    network: MONAD_NETWORK,
-    payTo,
-    price: toolPrice,
-  },
+const routeConfig = createMonadRouteConfig({
   resource: "/api/tool",
-};
+  description: "Mock compliance-check tool invocation",
+  unpaidResponseBody: () => ({
+    contentType: "application/json",
+    body: {
+      error: "payment_required",
+      resource: "/api/tool",
+    },
+  }),
+});
 
 async function handler(_request: NextRequest) {
   return NextResponse.json({
@@ -74,3 +43,7 @@ async function handler(_request: NextRequest) {
 }
 
 export const GET = withX402(handler, routeConfig, server);
+
+export function OPTIONS() {
+  return optionsResponse();
+}

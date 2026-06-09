@@ -15,12 +15,24 @@ import {
   MONAD_CHAIN_ID,
   MONAD_NETWORK,
 } from "./lib/x402-config";
+import type {
+  CapabilitySearchResult,
+  ExecuteResponse,
+  PayResponse,
+  QuoteResponse,
+} from "./lib/marketplace/types";
 
 export type ToolResult = {
   tool: string;
   status: "completed";
   result: Record<string, unknown>;
   completedAt: string;
+};
+
+export type MarketplaceToolRequest = {
+  query?: string;
+  capabilityId?: string;
+  arguments?: Record<string, unknown>;
 };
 
 type SignTypedDataParameters = Parameters<
@@ -92,6 +104,96 @@ async function readError(response: Response): Promise<string> {
   return details || `HTTP ${response.status} ${response.statusText}`;
 }
 
+async function readJsonOrThrow<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return (await response.json()) as T;
+}
+
+async function postJson<T>(
+  url: URL,
+  body: Record<string, unknown>,
+  requestFetch: typeof fetch = fetch,
+): Promise<{
+  data: T;
+  response: Response;
+}> {
+  const response = await requestFetch(url, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  return {
+    data: await readJsonOrThrow<T>(response),
+    response,
+  };
+}
+
+export async function searchTools(query: string): Promise<CapabilitySearchResult[]> {
+  const url = new URL("/api/search", getProviderUrl());
+  url.searchParams.set("q", query);
+
+  const response = await fetch(url, {
+    headers: {
+      accept: "application/json",
+    },
+  });
+
+  return readJsonOrThrow<CapabilitySearchResult[]>(response);
+}
+
+export async function requestCapability({
+  query = "sec filing analysis",
+  capabilityId,
+  arguments: args = {
+    company: "Example Corp",
+    filing_url: "https://example.com/10k.pdf",
+    focus: "financial risks",
+    constraints: { max_words: 500 },
+  },
+}: MarketplaceToolRequest = {}): Promise<{
+  result: ExecuteResponse;
+  settlement: SettleResponse | null;
+}> {
+  const providerUrl = getProviderUrl();
+  const selectedCapabilityId =
+    capabilityId ?? (await searchTools(query))[0]?.id ?? "sec-analyzer";
+
+  const quoteUrl = new URL("/api/quote", providerUrl);
+  const { data: quote } = await postJson<QuoteResponse>(quoteUrl, {
+    capability_id: selectedCapabilityId,
+    arguments: args,
+  });
+
+  const paymentFetch = buildPaymentFetch();
+  const payUrl = new URL("/api/pay", providerUrl);
+  payUrl.searchParams.set("quote_id", quote.quote_id);
+
+  const { data: paid, response: payResponse } = await postJson<PayResponse>(
+    payUrl,
+    {},
+    paymentFetch,
+  );
+
+  const executeUrl = new URL(paid.execute.endpoint, providerUrl);
+  const { data: result } = await postJson<ExecuteResponse>(executeUrl, {
+    quote_id: quote.quote_id,
+    execution_token: paid.execution_token,
+    arguments: args,
+  });
+
+  return {
+    result,
+    settlement: decodeSettlement(payResponse),
+  };
+}
+
 async function callTool(input?: Record<string, unknown>) {
   const paymentFetch = buildPaymentFetch();
   const url = new URL("/api/tool", getProviderUrl());
@@ -125,10 +227,11 @@ export async function getToolResult(input?: Record<string, unknown>): Promise<To
 }
 
 async function main() {
-  const { result, settlement } = await callTool();
+  const capabilityId = process.env.CAPABILITY_ID?.trim() || "sec-analyzer";
+  const { result, settlement } = await requestCapability({ capabilityId });
   const txHash = settlement?.transaction;
 
-  console.log("Tool result:");
+  console.log("Marketplace result:");
   console.log(JSON.stringify(result, null, 2));
 
   if (txHash) {

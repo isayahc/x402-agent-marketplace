@@ -49,3 +49,17 @@ export function envPrivateKey(name: string): Hex {
 export function explorerTxUrl(txHash: string): string {
   return `${MONAD_EXPLORER_TX_URL}/${txHash}`;
 }
+
+export function usdToAtomicUnits(amount: number): string {
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new Error("Payment amount must be a positive finite number");
+  }
+
+  const [whole, fraction = ""] = amount.toFixed(USDC_DECIMALS).split(".");
+  const paddedFraction = fraction.padEnd(USDC_DECIMALS, "0");
+
+  return (
+    BigInt(whole) * BigInt(10 ** USDC_DECIMALS) +
+    BigInt(paddedFraction)
+  ).toString();
+}
