@@ -3,6 +3,7 @@ node_modules/
 out/
 dist/
 coverage/
+logs/
 tsconfig.tsbuildinfo
 
 .env

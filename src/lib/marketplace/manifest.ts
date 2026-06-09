@@ -27,6 +27,9 @@ export function getMarketplaceManifest(baseUrl: string): MarketplaceManifest {
       providers: `${normalizedBaseUrl}/api/providers`,
       provider_registration: `${normalizedBaseUrl}/api/providers/register`,
       provider_capabilities: `${normalizedBaseUrl}/api/providers/{provider_id}/capabilities`,
+      a2a_message_send: `${normalizedBaseUrl}/api/a2a/message:send`,
+      a2a_task: `${normalizedBaseUrl}/api/a2a/tasks/{task_id}`,
+      a2a_runs: `${normalizedBaseUrl}/api/a2a/runs`,
     },
     flow: [
       "Search or list capabilities.",
@@ -35,6 +38,7 @@ export function getMarketplaceManifest(baseUrl: string): MarketplaceManifest {
       "Use the returned execution_token with POST /api/execute.",
       "Send only a narrow task packet in execute.arguments.",
       "Seller agents can register with POST /api/providers/register and publish capabilities under their provider id.",
+      "For A2A routing, pay a quote and send the returned execution_token with POST /api/a2a/message:send.",
     ],
   };
 }

@@ -4,6 +4,8 @@ import type { Address } from "viem";
 
 import { STATIC_MARKETPLACE_CAPABILITIES } from "./capabilities";
 import type {
+  A2AAgentCard,
+  A2AProtocolBinding,
   Capability,
   CapabilityRegistrationRequest,
   MarketplaceArchitecture,
@@ -16,6 +18,10 @@ const ARCHITECTURES = new Set<MarketplaceArchitecture>([
   "direct-tool-rental",
   "agent-as-a-service",
   "capability-leasing",
+]);
+const A2A_PROTOCOL_BINDINGS = new Set<A2AProtocolBinding>([
+  "JSONRPC",
+  "HTTP+JSON",
 ]);
 
 type ProviderRecord = RegisteredProvider & {
@@ -88,6 +94,20 @@ function validateAddress(value: string): Address {
   }
 
   return value as Address;
+}
+
+function validateA2AProtocolBinding(
+  value: ProviderRegistrationRequest["a2a_protocol_binding"],
+): A2AProtocolBinding {
+  if (!value) {
+    return "JSONRPC";
+  }
+
+  if (!A2A_PROTOCOL_BINDINGS.has(value)) {
+    throw new Error("a2a_protocol_binding must be JSONRPC or HTTP+JSON");
+  }
+
+  return value;
 }
 
 function validateArchitecture(
@@ -178,6 +198,15 @@ export function registerProvider(
     id: providerId,
     name: request.name.trim(),
     endpoint_url: validateUrl(request.endpoint_url, "endpoint_url"),
+    a2a_endpoint_url: request.a2a_endpoint_url
+      ? validateUrl(request.a2a_endpoint_url, "a2a_endpoint_url")
+      : undefined,
+    agent_card_url: request.agent_card_url
+      ? validateUrl(request.agent_card_url, "agent_card_url")
+      : undefined,
+    a2a_protocol_binding: validateA2AProtocolBinding(
+      request.a2a_protocol_binding,
+    ),
     pay_to: validateAddress(request.pay_to ?? ""),
     contact: request.contact,
     status: "active",
@@ -193,6 +222,7 @@ export function registerProvider(
     routes: {
       add_capability: `/api/providers/${provider.id}/capabilities`,
       list_capabilities: `/api/providers/${provider.id}/capabilities`,
+      agent_card: `/api/providers/${provider.id}/agent-card`,
     },
   };
 }
@@ -305,6 +335,9 @@ export function registerProviderCapability({
     seller: {
       mode: "provider",
       endpoint_url: provider.endpoint_url,
+      a2a_endpoint_url: provider.a2a_endpoint_url,
+      agent_card_url: provider.agent_card_url,
+      a2a_protocol_binding: provider.a2a_protocol_binding,
       pay_to: provider.pay_to,
       registered_at: new Date().toISOString(),
     },
@@ -313,4 +346,106 @@ export function registerProviderCapability({
   registryState().capabilities.set(capability.id, capability);
 
   return capability;
+}
+
+export function getProviderAgentCard({
+  providerId,
+  baseUrl,
+}: {
+  providerId: string;
+  baseUrl: string;
+}): A2AAgentCard {
+  const provider = registryState().providers.get(providerId);
+
+  if (!provider) {
+    throw new Error(`Unknown provider: ${providerId}`);
+  }
+
+  const capabilities = listProviderCapabilities(providerId);
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
+  const protocolBinding = provider.a2a_protocol_binding ?? "JSONRPC";
+
+  return {
+    protocolVersion: "0.3.0",
+    name: provider.name,
+    description: `${provider.name} exposes paid capabilities through the x402 Agent Marketplace.`,
+    url:
+      provider.a2a_endpoint_url ??
+      `${normalizedBaseUrl}/api/providers/${provider.id}/a2a`,
+    preferredTransport: protocolBinding,
+    version: "0.1.0",
+    provider: {
+      organization: provider.name,
+      url: provider.agent_card_url,
+    },
+    capabilities: {
+      streaming: false,
+      pushNotifications: false,
+      stateTransitionHistory: true,
+      extensions: [
+        {
+          uri: "https://x402.org/extensions/payment-required",
+          description:
+            "Tasks routed through the marketplace require an x402-paid execution token.",
+          required: true,
+          params: {
+            quote: `${normalizedBaseUrl}/api/quote`,
+            pay: `${normalizedBaseUrl}/api/pay?quote_id={quote_id}`,
+            route: `${normalizedBaseUrl}/api/a2a/message:send`,
+          },
+        },
+      ],
+    },
+    defaultInputModes: ["application/json", "text/plain"],
+    defaultOutputModes: ["application/json"],
+    skills: capabilities.map((capability) => ({
+      id: capability.id,
+      name: capability.name,
+      description: capability.summary,
+      tags: capability.capabilities,
+      inputModes: ["application/json", "text/plain"],
+      outputModes: ["application/json"],
+    })),
+  };
+}
+
+export function getMarketplaceAgentCard(baseUrl: string): A2AAgentCard {
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
+
+  return {
+    protocolVersion: "0.3.0",
+    name: "x402 Agent Marketplace Router",
+    description:
+      "Routes paid A2A tasks between buyer agents and seller agents after x402 settlement.",
+    url: `${normalizedBaseUrl}/api/a2a/message:send`,
+    preferredTransport: "HTTP+JSON",
+    version: "0.1.0",
+    provider: {
+      organization: "x402 Agent Marketplace",
+      url: normalizedBaseUrl,
+    },
+    capabilities: {
+      streaming: false,
+      pushNotifications: false,
+      stateTransitionHistory: true,
+      extensions: [
+        {
+          uri: "https://x402.org/extensions/payment-required",
+          description:
+            "Create a capability quote, pay through x402, then send the execution_token with message:send.",
+          required: true,
+        },
+      ],
+    },
+    defaultInputModes: ["application/json"],
+    defaultOutputModes: ["application/json"],
+    skills: listCapabilities().map((capability) => ({
+      id: capability.id,
+      name: capability.name,
+      description: capability.summary,
+      tags: capability.capabilities,
+      inputModes: ["application/json", "text/plain"],
+      outputModes: ["application/json"],
+    })),
+  };
 }

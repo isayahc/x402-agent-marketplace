@@ -31,6 +31,9 @@ export type Capability = {
   seller?: {
     mode: "static" | "provider";
     endpoint_url?: string;
+    a2a_endpoint_url?: string;
+    agent_card_url?: string;
+    a2a_protocol_binding?: "JSONRPC" | "HTTP+JSON";
     pay_to?: Address;
     registered_at?: string;
   };
@@ -40,6 +43,9 @@ export type RegisteredProvider = {
   id: string;
   name: string;
   endpoint_url: string;
+  a2a_endpoint_url?: string;
+  agent_card_url?: string;
+  a2a_protocol_binding?: "JSONRPC" | "HTTP+JSON";
   pay_to: Address;
   contact?: string;
   status: "active";
@@ -50,6 +56,9 @@ export type ProviderRegistrationRequest = {
   provider_id?: string;
   name?: string;
   endpoint_url?: string;
+  a2a_endpoint_url?: string;
+  agent_card_url?: string;
+  a2a_protocol_binding?: "JSONRPC" | "HTTP+JSON";
   pay_to?: string;
   contact?: string;
 };
@@ -60,6 +69,7 @@ export type ProviderRegistrationResponse = {
   routes: {
     add_capability: string;
     list_capabilities: string;
+    agent_card: string;
   };
 };
 
@@ -116,6 +126,9 @@ export type MarketplaceManifest = {
     providers: string;
     provider_registration: string;
     provider_capabilities: string;
+    a2a_message_send: string;
+    a2a_task: string;
+    a2a_runs: string;
   };
   flow: string[];
 };
@@ -181,4 +194,142 @@ export type ExecuteResponse = {
   architecture: MarketplaceArchitecture;
   result: Record<string, unknown>;
   completed_at: string;
+};
+
+export type A2AProtocolBinding = "JSONRPC" | "HTTP+JSON";
+
+export type A2AAgentSkill = {
+  id: string;
+  name: string;
+  description: string;
+  tags: string[];
+  inputModes?: string[];
+  outputModes?: string[];
+};
+
+export type A2AAgentCard = {
+  protocolVersion: string;
+  name: string;
+  description: string;
+  url: string;
+  preferredTransport: A2AProtocolBinding;
+  version: string;
+  provider?: {
+    organization: string;
+    url?: string;
+  };
+  capabilities: {
+    streaming: boolean;
+    pushNotifications: boolean;
+    stateTransitionHistory: boolean;
+    extensions?: Array<{
+      uri: string;
+      description: string;
+      required: boolean;
+      params?: Record<string, unknown>;
+    }>;
+  };
+  defaultInputModes: string[];
+  defaultOutputModes: string[];
+  skills: A2AAgentSkill[];
+  securitySchemes?: Record<string, unknown>;
+  security?: Array<Record<string, string[]>>;
+};
+
+export type A2ARole = "user" | "agent";
+
+export type A2APart =
+  | {
+      kind: "text";
+      text: string;
+      metadata?: Record<string, unknown>;
+    }
+  | {
+      kind: "data";
+      data: Record<string, unknown>;
+      metadata?: Record<string, unknown>;
+    };
+
+export type A2AMessage = {
+  kind: "message";
+  messageId: string;
+  role: A2ARole;
+  parts: A2APart[];
+  taskId?: string;
+  contextId?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type A2ATaskState =
+  | "submitted"
+  | "working"
+  | "input-required"
+  | "completed"
+  | "canceled"
+  | "failed"
+  | "rejected"
+  | "auth-required";
+
+export type A2ATaskStatus = {
+  state: A2ATaskState;
+  message?: A2AMessage;
+  timestamp?: string;
+};
+
+export type A2AArtifact = {
+  artifactId: string;
+  name?: string;
+  parts: A2APart[];
+  metadata?: Record<string, unknown>;
+};
+
+export type A2ATask = {
+  kind: "task";
+  id: string;
+  contextId?: string;
+  status: A2ATaskStatus;
+  artifacts?: A2AArtifact[];
+  history?: A2AMessage[];
+  metadata?: Record<string, unknown>;
+};
+
+export type A2ASendMessageRequest = {
+  message: A2AMessage;
+  configuration?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
+
+export type A2ASendMessageResponse = {
+  task?: A2ATask;
+  message?: A2AMessage;
+};
+
+export type PaidA2ASendMessageRequest = A2ASendMessageRequest & {
+  quote_id?: string;
+  execution_token?: string;
+};
+
+export type A2AInterfaceRunEvent = {
+  timestamp: string;
+  event: string;
+  message: string;
+  data?: Record<string, unknown>;
+};
+
+export type A2AInterfaceRun = {
+  id: string;
+  task_id: string;
+  status: A2ATaskState;
+  quote_id: string;
+  capability_id: string;
+  provider_id: string;
+  seller_endpoint_url: string;
+  protocol_binding: A2AProtocolBinding;
+  request: A2ASendMessageRequest;
+  response?: A2ASendMessageResponse;
+  remote_task_id?: string;
+  error?: string;
+  events: A2AInterfaceRunEvent[];
+  created_at: string;
+  updated_at: string;
 };

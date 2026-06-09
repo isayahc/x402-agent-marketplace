@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./lib/load-env";
 
 import { x402Client } from "@x402/core/client";
 import type { SettleResponse } from "@x402/core/types";
@@ -16,8 +16,10 @@ import {
   MONAD_NETWORK,
 } from "./lib/x402-config";
 import type {
+  A2AMessage,
   CapabilitySearchResult,
   ExecuteResponse,
+  PaidA2ASendMessageRequest,
   PayResponse,
   QuoteResponse,
 } from "./lib/marketplace/types";
@@ -187,6 +189,66 @@ export async function requestCapability({
     execution_token: paid.execution_token,
     arguments: args,
   });
+
+  return {
+    result,
+    settlement: decodeSettlement(payResponse),
+  };
+}
+
+export async function requestA2ACapability({
+  query = "sec filing analysis",
+  capabilityId,
+  arguments: args = {
+    prompt: "Return a compact structured analysis for this task packet.",
+  },
+}: MarketplaceToolRequest = {}): Promise<{
+  result: Record<string, unknown>;
+  settlement: SettleResponse | null;
+}> {
+  const providerUrl = getProviderUrl();
+  const selectedCapabilityId =
+    capabilityId ?? (await searchTools(query))[0]?.id ?? "sec-analyzer";
+
+  const quoteUrl = new URL("/api/quote", providerUrl);
+  const { data: quote } = await postJson<QuoteResponse>(quoteUrl, {
+    capability_id: selectedCapabilityId,
+    arguments: args,
+  });
+
+  const paymentFetch = buildPaymentFetch();
+  const payUrl = new URL("/api/pay", providerUrl);
+  payUrl.searchParams.set("quote_id", quote.quote_id);
+
+  const { data: paid, response: payResponse } = await postJson<PayResponse>(
+    payUrl,
+    {},
+    paymentFetch,
+  );
+  const message: A2AMessage = {
+    kind: "message",
+    messageId: crypto.randomUUID(),
+    role: "user",
+    parts: [
+      {
+        kind: "data",
+        data: args,
+      },
+    ],
+    metadata: {
+      capability_id: selectedCapabilityId,
+    },
+  };
+  const a2aUrl = new URL("/api/a2a/message:send", providerUrl);
+  const a2aPayload: PaidA2ASendMessageRequest = {
+    quote_id: quote.quote_id,
+    execution_token: paid.execution_token,
+    message,
+  };
+  const { data: result } = await postJson<Record<string, unknown>>(
+    a2aUrl,
+    a2aPayload as unknown as Record<string, unknown>,
+  );
 
   return {
     result,

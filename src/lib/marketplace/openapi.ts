@@ -202,6 +202,99 @@ export function getOpenApiSpec(baseUrl: string) {
           },
         },
       },
+      "/api/providers/{providerId}/agent-card": {
+        get: {
+          operationId: "getProviderAgentCard",
+          summary: "Get the marketplace-generated A2A Agent Card for a provider.",
+          parameters: [
+            {
+              name: "providerId",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": { description: "A2A Agent Card" },
+            "404": { description: "Unknown provider" },
+          },
+        },
+      },
+      "/.well-known/agent-card.json": {
+        get: {
+          operationId: "getMarketplaceAgentCard",
+          summary: "Get the marketplace A2A Agent Card.",
+          responses: {
+            "200": { description: "Marketplace A2A Agent Card" },
+          },
+        },
+      },
+      "/api/a2a/message:send": {
+        post: {
+          operationId: "routePaidA2AMessage",
+          summary:
+            "Route a paid A2A message/send task to a seller agent endpoint.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/PaidA2ASendMessageRequest",
+                },
+              },
+            },
+          },
+          responses: {
+            "200": { description: "A2A routed task and interface run" },
+            "400": { description: "Invalid token, quote, or A2A request" },
+          },
+        },
+      },
+      "/api/a2a/tasks/{taskId}": {
+        get: {
+          operationId: "getA2ATask",
+          summary: "Get the marketplace-tracked A2A task by id.",
+          parameters: [
+            {
+              name: "taskId",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": { description: "A2A task" },
+            "404": { description: "Unknown task" },
+          },
+        },
+      },
+      "/api/a2a/runs": {
+        get: {
+          operationId: "listA2AInterfaceRuns",
+          summary: "List marketplace-tracked A2A interface runs.",
+          responses: {
+            "200": { description: "A2A interface runs" },
+          },
+        },
+      },
+      "/api/a2a/runs/{runId}": {
+        get: {
+          operationId: "getA2AInterfaceRun",
+          summary: "Get one marketplace-tracked A2A interface run.",
+          parameters: [
+            {
+              name: "runId",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": { description: "A2A interface run" },
+            "404": { description: "Unknown interface run" },
+          },
+        },
+      },
     },
     components: {
       schemas: {
@@ -248,6 +341,13 @@ export function getOpenApiSpec(baseUrl: string) {
             provider_id: { type: "string" },
             name: { type: "string" },
             endpoint_url: { type: "string", format: "uri" },
+            a2a_endpoint_url: { type: "string", format: "uri" },
+            agent_card_url: { type: "string", format: "uri" },
+            a2a_protocol_binding: {
+              type: "string",
+              enum: ["JSONRPC", "HTTP+JSON"],
+              default: "JSONRPC",
+            },
             pay_to: { type: "string", pattern: "^0x[a-fA-F0-9]{40}$" },
             contact: { type: "string" },
           },
@@ -295,6 +395,55 @@ export function getOpenApiSpec(baseUrl: string) {
               },
             },
           },
+        },
+        PaidA2ASendMessageRequest: {
+          type: "object",
+          required: ["execution_token", "message"],
+          properties: {
+            quote_id: { type: "string" },
+            execution_token: { type: "string" },
+            message: { $ref: "#/components/schemas/A2AMessage" },
+            configuration: { type: "object" },
+            metadata: { type: "object" },
+          },
+        },
+        A2AMessage: {
+          type: "object",
+          required: ["kind", "messageId", "role", "parts"],
+          properties: {
+            kind: { const: "message" },
+            messageId: { type: "string" },
+            role: { type: "string", enum: ["user", "agent"] },
+            parts: {
+              type: "array",
+              items: { $ref: "#/components/schemas/A2APart" },
+            },
+            taskId: { type: "string" },
+            contextId: { type: "string" },
+            metadata: { type: "object" },
+          },
+        },
+        A2APart: {
+          oneOf: [
+            {
+              type: "object",
+              required: ["kind", "text"],
+              properties: {
+                kind: { const: "text" },
+                text: { type: "string" },
+                metadata: { type: "object" },
+              },
+            },
+            {
+              type: "object",
+              required: ["kind", "data"],
+              properties: {
+                kind: { const: "data" },
+                data: { type: "object" },
+                metadata: { type: "object" },
+              },
+            },
+          ],
         },
       },
     },

@@ -12,7 +12,10 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "agent": "tsx src/agent.ts",
-    "seller": "tsx src/seller.ts"
+    "seller": "tsx src/seller.ts",
+    "agents": "tsx src/agents/demo.ts",
+    "agent:buyer": "tsx src/agents/buyer-agent.ts",
+    "agent:seller": "tsx src/agents/seller-agent.ts"
   },
   "dependencies": {
     "@privy-io/react-auth": "^3.29.2",

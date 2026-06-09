@@ -4,7 +4,7 @@ export const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
   "Access-Control-Allow-Headers":
-    "content-type,accept,authorization,payment-signature,x-payment,x-provider-token",
+    "content-type,accept,authorization,a2a-version,a2a-extensions,payment-signature,x-payment,x-provider-token",
   "Access-Control-Expose-Headers":
     "payment-required,payment-response,x-payment-response",
 };

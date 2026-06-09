@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./lib/load-env";
 
 import {
   DEFAULT_PROVIDER_URL,
@@ -10,12 +10,50 @@ import type {
   ProviderRegistrationResponse,
 } from "./lib/marketplace/types";
 
+export type SellerCapabilityOptions = {
+  providerId?: string;
+  providerName?: string;
+  endpointUrl?: string;
+  a2aEndpointUrl?: string;
+  agentCardUrl?: string;
+  payTo?: string;
+  contact?: string;
+  capability?: CapabilityRegistrationRequest;
+};
+
+const DEMO_PAY_TO_ADDRESS = "0x0000000000000000000000000000000000000002";
+
 function getMarketplaceUrl() {
   return envString("PROVIDER_URL", DEFAULT_PROVIDER_URL).replace(/\/+$/, "");
 }
 
 function optionalEnv(name: string) {
   return process.env[name]?.trim() || undefined;
+}
+
+function isEvmAddress(value: string | undefined): value is `0x${string}` {
+  return Boolean(value && /^0x[a-fA-F0-9]{40}$/.test(value));
+}
+
+function shouldPay() {
+  return /^(1|true|yes)$/i.test(optionalEnv("AGENTS_PAY") ?? "");
+}
+
+function resolveSellerPayTo(payTo?: string) {
+  const candidate =
+    payTo ?? optionalEnv("SELLER_PAY_TO_ADDRESS") ?? optionalEnv("PAY_TO_ADDRESS");
+
+  if (isEvmAddress(candidate)) {
+    return candidate;
+  }
+
+  if (!shouldPay()) {
+    return DEMO_PAY_TO_ADDRESS;
+  }
+
+  throw new Error(
+    "SELLER_PAY_TO_ADDRESS or PAY_TO_ADDRESS must be a valid 20-byte EVM address when AGENTS_PAY=true.",
+  );
 }
 
 async function readJsonOrThrow<T>(response: Response): Promise<T> {
@@ -54,30 +92,8 @@ async function postJson<T>({
   return readJsonOrThrow<T>(response);
 }
 
-export async function registerSellerCapability() {
-  const marketplaceUrl = getMarketplaceUrl();
-  const providerId =
-    optionalEnv("SELLER_PROVIDER_ID") ?? `demo-provider-${Date.now()}`;
-  const providerName = optionalEnv("SELLER_NAME") ?? "Demo Seller Agent";
-  const endpointUrl =
-    optionalEnv("SELLER_ENDPOINT_URL") ??
-    `${marketplaceUrl}/api/mock-provider`;
-  const payTo =
-    optionalEnv("SELLER_PAY_TO_ADDRESS") ?? envString("PAY_TO_ADDRESS");
-
-  const registrationUrl = new URL("/api/providers/register", marketplaceUrl);
-  const registration = await postJson<ProviderRegistrationResponse>({
-    url: registrationUrl,
-    body: {
-      provider_id: providerId,
-      name: providerName,
-      endpoint_url: endpointUrl,
-      pay_to: payTo,
-      contact: optionalEnv("SELLER_CONTACT"),
-    },
-  });
-
-  const capability: CapabilityRegistrationRequest = {
+function defaultCapability(): CapabilityRegistrationRequest {
+  return {
     id: optionalEnv("SELLER_CAPABILITY_ID") ?? "demo-analysis",
     name: optionalEnv("SELLER_CAPABILITY_NAME") ?? "Demo Analysis Agent",
     architecture: "agent-as-a-service",
@@ -103,6 +119,56 @@ export async function registerSellerCapability() {
         optionalEnv("SELLER_MARKETPLACE_FEE_BPS") ?? "0",
         10,
       ),
+    },
+  };
+}
+
+export async function registerSellerCapability(
+  options: SellerCapabilityOptions = {},
+) {
+  const marketplaceUrl = getMarketplaceUrl();
+  const providerId =
+    options.providerId ??
+    optionalEnv("SELLER_PROVIDER_ID") ??
+    `demo-provider-${Date.now()}`;
+  const providerName =
+    options.providerName ?? optionalEnv("SELLER_NAME") ?? "Demo Seller Agent";
+  const endpointUrl =
+    options.endpointUrl ??
+    optionalEnv("SELLER_ENDPOINT_URL") ??
+    `${marketplaceUrl}/api/mock-provider`;
+  const a2aEndpointUrl =
+    options.a2aEndpointUrl ??
+    optionalEnv("SELLER_A2A_ENDPOINT_URL") ??
+    `${marketplaceUrl}/api/mock-provider/a2a`;
+  const agentCardUrl =
+    options.agentCardUrl ??
+    optionalEnv("SELLER_AGENT_CARD_URL") ??
+    `${marketplaceUrl}/api/mock-provider/agent-card`;
+  const payTo = resolveSellerPayTo(options.payTo);
+
+  const registrationUrl = new URL("/api/providers/register", marketplaceUrl);
+  const registration = await postJson<ProviderRegistrationResponse>({
+    url: registrationUrl,
+    body: {
+      provider_id: providerId,
+      name: providerName,
+      endpoint_url: endpointUrl,
+      a2a_endpoint_url: a2aEndpointUrl,
+      agent_card_url: agentCardUrl,
+      a2a_protocol_binding: "JSONRPC",
+      pay_to: payTo,
+      contact: options.contact ?? optionalEnv("SELLER_CONTACT"),
+    },
+  });
+
+  const fallbackCapability = defaultCapability();
+  const capability: CapabilityRegistrationRequest = {
+    ...fallbackCapability,
+    ...options.capability,
+    price: {
+      ...fallbackCapability.price,
+      ...options.capability?.price,
     },
   };
 
