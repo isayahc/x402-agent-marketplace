@@ -1,38 +1,14 @@
 "use client";
 
-import { PrivyProvider } from "@privy-io/react-auth";
+import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
 
-const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
-const privyClientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID;
+// Privy pulls in WalletConnect, which touches `localStorage` at import time.
+// Loading it with ssr:false keeps that out of the server render.
+const PrivyAuthProvider = dynamic(() => import("./privy-provider"), {
+  ssr: false,
+});
 
 export function Providers({ children }: { children: ReactNode }) {
-  if (!privyAppId) {
-    return <>{children}</>;
-  }
-
-  return (
-    <PrivyProvider
-      appId={privyAppId}
-      clientId={privyClientId || undefined}
-      config={{
-        loginMethods: ["email", "wallet", "google"],
-        appearance: {
-          theme: "light",
-          accentColor: "#2563eb",
-          landingHeader: "Create your marketplace account",
-          loginMessage: "Sign in to manage marketplace access.",
-          showWalletLoginFirst: false,
-          walletChainType: "ethereum-only",
-        },
-        embeddedWallets: {
-          ethereum: {
-            createOnLogin: "users-without-wallets",
-          },
-        },
-      }}
-    >
-      {children}
-    </PrivyProvider>
-  );
+  return <PrivyAuthProvider>{children}</PrivyAuthProvider>;
 }
